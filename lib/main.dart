@@ -3,8 +3,7 @@ import 'package:cnp_navigator/explore_page.dart';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'notice_page.dart';
-import 'account_page.dart';
-
+import 'login_page.dart';
 void main() {
   runApp(const MyApp());
 }
@@ -39,7 +38,7 @@ class _MainNavState extends State<MainNav> {
     HomePage(),
     ExplorePage(),
     NoticePage(),
-    AccountPage(),
+    LoginPage(),
   ];
 
   static const List<String> _titles = <String>[
@@ -63,6 +62,8 @@ class _MainNavState extends State<MainNav> {
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF2E7D32),
+        unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),

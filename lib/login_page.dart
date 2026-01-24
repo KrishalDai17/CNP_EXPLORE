@@ -52,10 +52,10 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Green circular leaf icon
-                  CircleAvatar(
+                  const CircleAvatar(
                     radius: 32,
                     backgroundColor: Colors.green,
-                    child: const Icon(Icons.eco, color: Colors.white, size: 32),
+                    child: Icon(Icons.eco, color: Colors.white, size: 32),
                   ),
                   const SizedBox(height: 16),
 

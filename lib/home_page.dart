@@ -6,8 +6,8 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CommonLayout(
-      child: const Center(
+    return const CommonLayout(
+      child: Center(
         child: Text('Home Page'),
       ),
     );

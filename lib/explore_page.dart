@@ -88,10 +88,10 @@ class ExplorePage extends StatelessWidget {
 
   // Filter Label (non-clickable)
   Widget _buildFilterLabel() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
-        children: const [
+        children: [
           Icon(
             Icons.filter_list,
             color: Color(0xFF2E7D32),
