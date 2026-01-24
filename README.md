@@ -235,7 +235,7 @@ git reset HEAD path/to/sensitive/file
 
 ### Development vs Production
 
-This project supports multiple environments:
+
 
 - **Development**: For local testing
 - **Staging**: For testing before production

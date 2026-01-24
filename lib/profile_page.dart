@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+
 class AccountPage extends StatelessWidget {
   const AccountPage({super.key});
 
@@ -7,26 +8,16 @@ class AccountPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 3, // Account tab selected
-        selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Notices'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Account'),
-        ],
-      ),
+      
       body: Column(
         children: [
           // Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             color: Colors.green,
-            child: Row(
+            child: const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
+              children: [
                 Row(
                   children: [
                     Icon(Icons.eco, color: Colors.white),
@@ -50,8 +41,8 @@ class AccountPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.white,
-            child: Row(
-              children: const [
+            child: const Row(
+              children: [
                 CircleAvatar(
                   radius: 24,
                   child: Icon(Icons.person, size: 28),
