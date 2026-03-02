@@ -94,6 +94,10 @@ class _BookingPageState extends State<BookingPage> {
   int domesticCount = 0, saarcCount = 0, touristCount = 0;
   bool showReview = false, isSaving = false; 
 
+  // --- LOGIC FOR PERSON LIMIT ---
+  int get totalPersonCount => domesticCount + saarcCount + touristCount;
+  final int maxPersons = 5;
+
   int calculateGrandTotal() {
     int total = 0;
     for (var actName in widget.activityList) {
@@ -116,12 +120,11 @@ class _BookingPageState extends State<BookingPage> {
         throw Exception("No user logged in. Please sign in to book.");
       }
 
-      // Logic to fetch the Name for the Admin Portal
       String nameToSave = user.displayName ?? user.email?.split('@')[0] ?? "Guest User";
 
-      await FirebaseFirestore.instance.collection('bookings').add({
+      final docRef = await FirebaseFirestore.instance.collection('bookings').add({
         'userId': user.uid,
-        'userName': nameToSave, // <--- Name added here
+        'userName': nameToSave,
         'activities': widget.activityList,
         'date': selectedDate != null ? DateFormat('yyyy-MM-dd').format(selectedDate!) : "",
         'time': selectedTime,
@@ -140,6 +143,7 @@ class _BookingPageState extends State<BookingPage> {
           context,
           MaterialPageRoute(
             builder: (context) => PaymentPage(
+              bookingId: docRef.id,
               activityName: widget.activityList.join(", "),
               date: selectedDate!,
               time: selectedTime,
@@ -195,25 +199,55 @@ class _BookingPageState extends State<BookingPage> {
 
     return ListView(
       children: [
+        // Activity Price Breakdown Section
         Container(
           padding: const EdgeInsets.all(16),
           decoration: _cardStyle(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Selected Activities", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: widget.activityList.map((act) => Chip(
-                  label: Text(act, style: const TextStyle(fontSize: 12)),
-                  backgroundColor: Colors.green.shade100,
-                )).toList(),
-              ),
+              const Text("Selected Activities & Rates", 
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Divider(height: 20),
+              ...widget.activityList.map((actName) {
+                final info = activityData[actName];
+                if (info == null) return const SizedBox.shrink();
+                
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                          const SizedBox(width: 8),
+                          Text(actName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _priceItem("Domestic", info.domestic),
+                          _priceItem("SAARC", info.saarc),
+                          _priceItem("Tourist", info.tourist),
+                        ],
+                      ),
+                      if (widget.activityList.last != actName) 
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8.0),
+                          child: Divider(color: Color(0xFFF0F0F0)),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ],
           ),
         ),
         const SizedBox(height: 16),
+        // Date Selection
         Container(
           padding: const EdgeInsets.all(16),
           decoration: _cardStyle(),
@@ -245,6 +279,7 @@ class _BookingPageState extends State<BookingPage> {
           ),
         ),
         const SizedBox(height: 16),
+        // Time Selection
         Container(
           padding: const EdgeInsets.all(16),
           decoration: _cardStyle(),
@@ -268,35 +303,49 @@ class _BookingPageState extends State<BookingPage> {
           ),
         ),
         const SizedBox(height: 16),
+        // Visitor Counters with Person Limit
         Container(
           padding: const EdgeInsets.all(16),
           decoration: _cardStyle(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Visitors", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Visitors", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text("$totalPersonCount / $maxPersons Persons", 
+                    style: TextStyle(
+                      color: totalPersonCount >= maxPersons ? Colors.red : Colors.grey,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    )),
+                ],
+              ),
+              const SizedBox(height: 8),
               _counterRow(
                   "Domestic (Nepal)", 
                   "Rs. $unitPriceDomestic/person", 
                   domesticCount, 
-                  () => setState(() => domesticCount++), 
+                  totalPersonCount < maxPersons ? () => setState(() => domesticCount++) : null, 
                   () => setState(() => domesticCount--)),
               _counterRow(
                   "SAARC Countries", 
                   "Rs. $unitPriceSaarc/person", 
                   saarcCount, 
-                  () => setState(() => saarcCount++), 
+                  totalPersonCount < maxPersons ? () => setState(() => saarcCount++) : null, 
                   () => setState(() => saarcCount--)),
               _counterRow(
                   "Other Tourists", 
                   "Rs. $unitPriceTourist/person", 
                   touristCount, 
-                  () => setState(() => touristCount++), 
+                  totalPersonCount < maxPersons ? () => setState(() => touristCount++) : null, 
                   () => setState(() => touristCount--)),
             ],
           ),
         ),
         const SizedBox(height: 16),
+        // Total Amount
         Container(
           padding: const EdgeInsets.all(16),
           decoration: _cardStyle(),
@@ -314,12 +363,22 @@ class _BookingPageState extends State<BookingPage> {
           height: 48,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4FBF26)),
-            onPressed: total == 0 || selectedDate == null || selectedTime.isEmpty
+            onPressed: total == 0 || selectedDate == null || selectedTime.isEmpty || totalPersonCount > maxPersons
                 ? null
                 : () => setState(() => showReview = true),
             child: const Text("Continue to Review", style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _priceItem(String label, int price) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text("Rs. $price", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
       ],
     );
   }
@@ -338,6 +397,7 @@ class _BookingPageState extends State<BookingPage> {
         if (domesticCount > 0) _summaryRow("Domestic", "$domesticCount"),
         if (saarcCount > 0) _summaryRow("SAARC", "$saarcCount"),
         if (touristCount > 0) _summaryRow("Other Tourists", "$touristCount"),
+        _summaryRow("Total Persons", "$totalPersonCount"),
         const Divider(height: 30, thickness: 1),
         _summaryRow("Total Amount", "Rs. $total"),
         const Spacer(),
@@ -366,7 +426,7 @@ class _BookingPageState extends State<BookingPage> {
     );
   }
 
-  Widget _counterRow(String label, String priceUnit, int count, VoidCallback onAdd, VoidCallback onRemove) {
+  Widget _counterRow(String label, String priceUnit, int count, VoidCallback? onAdd, VoidCallback onRemove) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -383,6 +443,7 @@ class _BookingPageState extends State<BookingPage> {
           children: [
             IconButton(icon: const Icon(Icons.remove), onPressed: count > 0 ? onRemove : null),
             Text("$count"),
+            // onAdd is null when max is reached, disabling the button
             IconButton(icon: const Icon(Icons.add), onPressed: onAdd),
           ],
         ),

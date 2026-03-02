@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Add this
+import 'package:esewa_flutter_sdk/esewa_flutter_sdk.dart';
+import 'package:esewa_flutter_sdk/esewa_config.dart';
+import 'package:esewa_flutter_sdk/esewa_payment.dart';
+import 'package:esewa_flutter_sdk/esewa_payment_success_result.dart';
 
 class PaymentPage extends StatefulWidget {
   final String activityName;
   final DateTime date;
   final String time;
   final int totalAmount;
+  final String bookingId; // Add this to receive the ID from the previous page
 
   const PaymentPage({
     super.key,
@@ -13,6 +19,7 @@ class PaymentPage extends StatefulWidget {
     required this.date,
     required this.time,
     required this.totalAmount,
+    required this.bookingId, // Make it required
   });
 
   @override
@@ -21,138 +28,160 @@ class PaymentPage extends StatefulWidget {
 
 class _PaymentPageState extends State<PaymentPage> {
   String? selectedMethod;
-  bool isProcessing = false;
+  bool isSavingToFirebase = false;
 
   final List<Map<String, String>> paymentMethods = [
     {"name": "Khalti", "image": "assets/images/khaltilogo.png"},
     {"name": "eSewa", "image": "assets/images/esewalogo.png"},
   ];
 
-  // Logic to handle the payment button click
-  void _handlePayment() async {
-    setState(() => isProcessing = true);
+  void _payWithEsewa() {
+    try {
+      EsewaFlutterSdk.initPayment(
+        esewaConfig: EsewaConfig(
+          environment: Environment.test,
+          clientId: "JB0BBQ4aD0UqIThFJwAKBgAXEUkEGQUBBAwdOgABHD4DChwUAB0R",
+          secretId: "BhwIWQQADhIYSxILExMcAgFXFhcOBwAKBgAXEQ==",
+        ),
+        esewaPayment: EsewaPayment(
+          productId: widget.bookingId, // Use your actual booking ID here
+          productName: widget.activityName,
+          productPrice: widget.totalAmount.toString(),
+          callbackUrl: "https://example.com/",
+        ),
+        onPaymentSuccess: (EsewaPaymentSuccessResult data) {
+          // Instead of a generic save, we UPDATE the existing record
+          _updateBookingStatus(refId: data.refId);
+        },
+        onPaymentFailure: (data) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Payment Failed or Technical Error")),
+          );
+        },
+        onPaymentCancellation: (data) => debugPrint("User cancelled payment"),
+      );
+    } catch (e) {
+      debugPrint("SDK Error: $e");
+    }
+  }
 
-    // Simulate network delay for payment gateway
-    await Future.delayed(const Duration(seconds: 2));
+  // --- THE FIX: UPDATE EXISTING INSTEAD OF SAVING NEW ---
+  Future<void> _updateBookingStatus({required String refId}) async {
+    setState(() => isSavingToFirebase = true);
+    try {
+      // We use .doc(widget.bookingId).update to avoid duplicates
+      await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .update({
+        'status': 'pending', // Keeps it orange/pending for Admin
+        'transactionId': refId,
+        'paymentMethod': 'eSewa',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      if (mounted) _showPendingApprovalDialog();
+    } catch (e) {
+      debugPrint("Firebase Update Error: $e");
+    } finally {
+      if (mounted) setState(() => isSavingToFirebase = false);
+    }
+  }
 
-    if (!mounted) return;
-
-    // Show Success Dialog
+  void _showPendingApprovalDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+        title: const Row(
           children: [
-            const Text("Booking Confirmed!",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 10),
-            Text("Payment of Rs. ${widget.totalAmount} via $selectedMethod successful."),
+            Icon(Icons.hourglass_empty, color: Colors.orange),
+            SizedBox(width: 10),
+            Text("Payment Received"),
           ],
         ),
+        content: const Text(
+          "Your payment is successful! Your booking is now **Pending Admin Confirmation**. "
+          "You will be notified once the admin verifies the transaction.",
+        ),
         actions: [
-          Center(
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4FBF26)),
-              onPressed: () {
-                // Return to Home Screen (removes all previous screens)
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-              child: const Text("Go to Home", style: TextStyle(color: Colors.black)),
-            ),
+          TextButton(
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            child: const Text("Go to Home"),
           ),
         ],
       ),
     );
-    
-    setState(() => isProcessing = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    // ... UI remains the same as your previous code ...
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F5),
       appBar: AppBar(
-        title: const Text("Payment"),
+        title: const Text("Select Payment Method"),
         backgroundColor: const Color(0xFF4FBF26),
         centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Summary Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-              ),
-              child: Column(
-                children: [
-                  Text(widget.activityName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text("${DateFormat('MMM d, yyyy').format(widget.date)} | ${widget.time}"),
-                  const Divider(height: 24),
-                  const Text("Total Payable", style: TextStyle(color: Colors.grey)),
-                  Text("Rs. ${widget.totalAmount}", 
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green)),
-                ],
-              ),
+            const Text(
+              "Choose your payment method",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            
             const SizedBox(height: 24),
-            const Text("Select Payment Method", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-
-            // Payment Options
             ...paymentMethods.map((method) {
               bool isSelected = selectedMethod == method["name"];
               return GestureDetector(
                 onTap: () => setState(() => selectedMethod = method["name"]),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
+                child: Card(
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isSelected ? Colors.green : Colors.transparent, width: 2),
+                    side: BorderSide(
+                      color: isSelected ? Colors.green : Colors.transparent,
+                      width: 2,
+                    ),
                   ),
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  elevation: 4,
                   child: ListTile(
-                    leading: Image.asset(method["image"]!, width: 40, height: 40, errorBuilder: (c, e, s) => const Icon(Icons.payment)),
-                    title: Text(method["name"]!, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    leading: Image.asset(method["image"]!, width: 50, height: 50, fit: BoxFit.contain),
+                    title: Text(method["name"]!, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     trailing: Radio<String>(
                       value: method["name"]!,
                       groupValue: selectedMethod,
-                      activeColor: Colors.green,
                       onChanged: (value) => setState(() => selectedMethod = value),
                     ),
                   ),
                 ),
               );
-            }).toList(),
-
+            }),
             const Spacer(),
-
-            // Action Button
             SizedBox(
               width: double.infinity,
-              height: 55,
+              height: 50,
               child: ElevatedButton(
-                onPressed: (selectedMethod == null || isProcessing) ? null : _handlePayment,
+                onPressed: (selectedMethod == null || isSavingToFirebase)
+                    ? null
+                    : () {
+                        if (selectedMethod == "eSewa") {
+                          _payWithEsewa();
+                        } else if (selectedMethod == "Khalti") {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Khalti support coming soon!")),
+                          );
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4FBF26),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  disabledBackgroundColor: Colors.grey.shade400,
                 ),
-                child: isProcessing
-                    ? const CircularProgressIndicator(color: Colors.black)
-                    : const Text("Confirm & Pay", style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
+                child: isSavingToFirebase 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Pay Now", style: TextStyle(color: Colors.black, fontSize: 16)),
               ),
             ),
           ],

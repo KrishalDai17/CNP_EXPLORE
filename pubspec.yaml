@@ -11,8 +11,12 @@ dependencies:
   flutter:
     sdk: flutter
   
+  # --- Local SDKs ---
+  esewa_flutter_sdk:
+    path: ./esewa_flutter_sdk 
+
   # --- Common & Utilities ---
-  intl: ^0.19.0           # Balanced version for compatibility
+  intl: ^0.19.0           
   cupertino_icons: ^1.0.8
   url_launcher: ^6.3.0    # Essential for admin email replies & maps
   
@@ -28,19 +32,22 @@ dependencies:
   get_it: ^7.6.4
   dartz: ^0.10.1
   flutter_dotenv: ^5.1.0
+  
+  # --- Payment & Security ---
+  webview_flutter: ^4.10.0 
+  crypto: ^3.0.6           
 
   # --- Friend's Unique Features ---
-  audioplayers: ^6.5.1    # Required for the birdsounds
+  audioplayers: ^6.5.1    
   
   # --- Your Unique Features ---
-  image_picker: ^1.2.1    # For uploading profile/activity photos
-  cached_network_image: 3.3.1
+  image_picker: ^1.2.1    
+  cached_network_image: ^3.3.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0 
-    # Updated to modern linting standards
 
 flutter:
   uses-material-design: true
@@ -48,4 +55,4 @@ flutter:
   assets:
     - .env
     - assets/images/
-    - assets/music/       # Added from friend's project for birdsounds
+    - assets/music/

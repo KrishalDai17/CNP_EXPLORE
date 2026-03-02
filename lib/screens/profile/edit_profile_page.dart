@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EditProfilePage extends StatefulWidget {
   final String fullName;
@@ -27,6 +29,7 @@ class EditProfilePage extends StatefulWidget {
 
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
   late TextEditingController fullNameController;
   late TextEditingController dobController;
@@ -37,6 +40,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   String? selectedGender;
   String? selectedNationality;
 
+  final List<String> genderOptions = const ["Male", "Female", "Other"];
   final List<String> nationalityOptions = const [
     "Nepalese",
     "Indian",
@@ -53,8 +57,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     ageController = TextEditingController(text: widget.age);
     emailController = TextEditingController(text: widget.email);
     contactController = TextEditingController(text: widget.contact);
-    selectedGender = widget.gender;
-    selectedNationality = widget.nationality;
+    
+    // Trim values to prevent "Red Screen" errors from hidden spaces in Firebase
+    selectedGender = widget.gender.trim();
+    selectedNationality = widget.nationality.trim();
   }
 
   @override
@@ -90,12 +96,44 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  void saveProfile() {
+  Future<void> saveProfile() async {
     if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully!')),
-      );
-      // Here you can send updated data to backend or state management
+      setState(() => _isLoading = true);
+
+      try {
+        final User? user = FirebaseAuth.instance.currentUser;
+
+        if (user != null) {
+          // 1. Update Name in Firebase Auth
+          await user.updateDisplayName(fullNameController.text.trim());
+
+          // 2. Update All details in Firestore
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+            'fullName': fullNameController.text.trim(),
+            'dob': dobController.text,
+            'age': ageController.text,
+            'gender': selectedGender,
+            'nationality': selectedNationality,
+            'contact': contactController.text.trim(),
+            'lastUpdated': FieldValue.serverTimestamp(),
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Profile updated successfully!')),
+            );
+            Navigator.pop(context); 
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Update failed: ${e.toString()}')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -115,7 +153,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             children: [
-              // Always show default person icon
               const CircleAvatar(
                 radius: 50,
                 backgroundColor: Color(0xFF4FBF26),
@@ -123,12 +160,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               const SizedBox(height: 16),
 
-              // Full Name
               _textField(fullNameController, "Full Name", 'Please enter your full name'),
-
               const SizedBox(height: 12),
 
-              // DOB & Age row
               Row(
                 children: [
                   Expanded(
@@ -144,82 +178,59 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     child: TextFormField(
                       controller: ageController,
                       readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: "Age",
-                        filled: true,
-                        fillColor: const Color(0xFFEFF5EB),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding:
-                        const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-                      ),
+                      decoration: _inputStyle("Age"),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
 
-              // Gender
+              // FIXED GENDER DROPDOWN
               DropdownButtonFormField<String>(
-                value: selectedGender,
-                decoration: _dropdownDecoration("Gender"),
-                items: const [
-                  DropdownMenuItem(value: "Male", child: Text("Male")),
-                  DropdownMenuItem(value: "Female", child: Text("Female")),
-                  DropdownMenuItem(value: "Other", child: Text("Other")),
-                ],
+                value: genderOptions.contains(selectedGender) ? selectedGender : null,
+                decoration: _inputStyle("Gender"),
+                items: genderOptions
+                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                    .toList(),
                 validator: (value) => value == null ? 'Please select your gender' : null,
                 onChanged: (val) => setState(() => selectedGender = val),
               ),
-
               const SizedBox(height: 12),
 
-              // Nationality
+              // FIXED NATIONALITY DROPDOWN
               DropdownButtonFormField<String>(
-                value: selectedNationality,
-                decoration: _dropdownDecoration("Nationality"),
+                value: nationalityOptions.contains(selectedNationality) ? selectedNationality : null,
+                decoration: _inputStyle("Nationality"),
                 items: nationalityOptions
                     .map((nat) => DropdownMenuItem(value: nat, child: Text(nat)))
                     .toList(),
-                validator: (value) =>
-                value == null ? 'Please select your nationality' : null,
+                validator: (value) => value == null ? 'Please select your nationality' : null,
                 onChanged: (val) => setState(() => selectedNationality = val),
               ),
-
               const SizedBox(height: 12),
 
-              // Email
-              _textField(emailController, "Email", 'Enter a valid email address', email: true),
-
+              TextFormField(
+                controller: emailController,
+                readOnly: true, // Email remains permanent
+                decoration: _inputStyle("Email"),
+              ),
               const SizedBox(height: 12),
 
-              // Contact
               _textField(contactController, "Contact No", 'Enter a valid contact number', phone: true),
+              const SizedBox(height: 30),
 
-              const SizedBox(height: 20),
-
-              // Save Button
               SizedBox(
                 width: double.infinity,
-                height: 45,
+                height: 50,
                 child: ElevatedButton(
-                  onPressed: saveProfile,
+                  onPressed: _isLoading ? null : saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4FBF26),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                   ),
-                  child: const Text(
-                    'Save Changes',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: _isLoading 
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                    : const Text('Save Changes', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
               ),
             ],
@@ -229,44 +240,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  InputDecoration _dropdownDecoration(String label) => InputDecoration(
+  InputDecoration _inputStyle(String label) => InputDecoration(
     labelText: label,
     filled: true,
     fillColor: const Color(0xFFEFF5EB),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    ),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
     contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
   );
 
-  TextFormField _textField(TextEditingController controller, String label, String error,
-      {bool email = false, bool phone = false}) {
+  TextFormField _textField(TextEditingController controller, String label, String error, {bool phone = false}) {
     return TextFormField(
       controller: controller,
-      keyboardType: email
-          ? TextInputType.emailAddress
-          : phone
-          ? TextInputType.phone
-          : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: const Color(0xFFEFF5EB),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-      ),
+      keyboardType: phone ? TextInputType.phone : TextInputType.text,
+      decoration: _inputStyle(label),
       validator: (value) {
         if (value == null || value.isEmpty) return error;
-        if (email && !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-          return 'Enter a valid email';
-        }
-        if (phone && !RegExp(r'^(?:\+977\s\d{10}|\d{10})$').hasMatch(value)) {
-          return 'Enter a valid Nepali contact number';
-        }
+        if (phone && !RegExp(r'^(?:\+977\s\d{10}|\d{10})$').hasMatch(value)) return 'Enter a valid Nepali contact number';
         return null;
       },
     );
